@@ -43,22 +43,48 @@ static int mods_ap_message_send(struct mods_dl_device *dld,
 }
 
 /* Get the corresponding connection's protocol */
-static int mods_ap_get_protocol(uint16_t cport_id, uint8_t *protocol)
+static int mods_ap_get_protocol(u16 from_cport, u16 to_cport, u8 *protocol)
 {
 	struct gb_connection *conn;
+	struct gb_bundle *bundle;
+	int i;
 
 	if (!g_hd)
 		return -ENODEV;
 
-	conn = gb_connection_hd_find(g_hd, cport_id);
+	conn = gb_connection_hd_find(g_hd, from_cport);
 	if (!conn) {
-		pr_err("mods_ap: couldn't find protocol for: %d\n", cport_id);
+		pr_err("mods_ap: no gb_connection for: %d\n", from_cport);
 		return -ENODEV;
 	}
 
-	*protocol = conn->protocol_id;
+	bundle = conn->bundle;
 
-	return 0;
+	/* If there is no bundle, its special case, either control or SVC */
+	if (!bundle) {
+		if (!(conn->flags & GB_CONNECTION_FLAG_HIGH_PRIO)) {
+			pr_err("mods_ap: no bundle for: %d flags: %d\n",
+			       from_cport, conn->flags);
+			return -ENODEV;
+		}
+
+		if (conn->flags & GB_CONNECTION_FLAG_CONTROL)
+			*protocol = GREYBUS_PROTOCOL_CONTROL;
+		else
+			*protocol = GREYBUS_PROTOCOL_SVC;
+
+		return 0;
+	}
+
+	for (i = 0; i < bundle->num_cports; i++)
+		if (bundle->cport_desc[i].id == to_cport) {
+			*protocol = bundle->cport_desc[i].protocol_id;
+			return 0;
+		}
+
+	pr_err("mods_ap: Couldn't find matching cport_desc: %d\n", from_cport);
+
+	return -ENODEV;
 }
 
 static struct mods_dl_driver mods_ap_dl_driver = {

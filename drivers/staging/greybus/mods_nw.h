@@ -35,7 +35,7 @@ struct muc_msg {
 struct mods_dl_driver {
 	int (*message_send)(struct mods_dl_device *nd, uint8_t *payload,
 			size_t size);
-	int (*get_protocol)(uint16_t cport_id, uint8_t *protocol);
+	int (*get_protocol)(u16 from_cport, u16 to_cport, u8 *protocol);
 };
 
 enum {

@@ -235,7 +235,8 @@ int mods_nw_add_route(u8 from_intf, u16 from_cport, u8 to_intf, u16 to_cport)
 		return 0;
 
 	/* Try to get the protocol, any error should be fatal */
-	err = from_cset->dev->drv->get_protocol(from_cport, &protocol);
+	err = from_cset->dev->drv->get_protocol(from_cport, to_cport,
+						&protocol);
 	if (err) {
 		pr_warn("Unable to get a protocol for %d:%d\n",
 				from_intf, from_cport);
