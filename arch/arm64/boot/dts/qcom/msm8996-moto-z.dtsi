@@ -1,0 +1,120 @@
+/*
+ * Copyright (c) 2016, Jason Hrycay. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "msm8996-moto-z-pins.dtsi"
+
+&soc {
+	muc_svc: muc_svc@0 {
+		compatible = "mmi,muc_svc";
+
+		mmi,use-authentication;
+		mmi,endo-mask = <0x4755>;
+
+		mmi,default-root-ver = /bits/ 8 <2>;
+	};
+
+	muc: muc {
+		compatible = "mmi,muc";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0 0xffffffff>;
+
+		gpios = <&msmgpio 73 1>,   /* gpio_muc_det_n */
+			<&msmgpio 35 0>,   /* gpio_muc_bplus_en */
+			<&msmgpio 79 1>,   /* gpio_muc_int_n */
+			<&msmgpio 74 2>,   /* gpio_muc_wake_n */
+			<&msmgpio 82 1>,   /* gpio_muc_rdy_n */
+			<&msmgpio 143 0>,  /* gpio_muc_ff */
+			<&msmgpio 0 0>,    /* gpio_muc_spi_mosi */
+			<&msmgpio 1 1>,    /* gpio_muc_spi_miso */
+			<0>,               /* gpio_muc_bplus_iset */
+			<0>,               /* gpio_muc_bplus_discharg */
+			<0>;               /* gpio_muc_bplus_fault_n */
+
+		mmi,muc-ctrl-gpio-labels = "gpio_muc_det_n",
+			"gpio_muc_bplus_en",
+			"gpio_muc_int_n",
+			"gpio_muc_wake_n",
+			"gpio_muc_rdy_n",
+			"gpio_muc_ff",
+			"gpio_muc_spi_mosi",
+			"gpio_muc_spi_miso",
+			"gpio_muc_bplus_iset",
+			"gpio_muc_bplus_discharg",
+			"gpio_muc_bplus_fault_n";
+
+		mmi,muc-ctrl-det-hysteresis = <200>;
+		mmi,muc-ctrl-rm-hysteresis = <5>;
+		mmi,muc-ctrl-en-seq =  <1 1 200>;
+		mmi,muc-ctrl-dis-seq = <1 0 600>;
+
+		/* v1 FF first, BPLUS second on enable */
+		mmi,muc-ctrl-ff-seq-v1 = <5 1 20>, <1 0 100>,
+					<1 1 100>, <5 0 20>;
+
+		/* v2 BPLUS first, FF second on enable */
+		mmi,muc-ctrl-ff-seq-v2 = <1 1 100>, <5 1 20>, <5 0 20>;
+
+		pinctrl-names = "default", "disconnected", "spi_active",
+				"spi_ack", "i2c_active";
+		pinctrl-0 = <&muc_attach &muc_det &muc_spi_ctrl &spi_0_sleep>;
+		pinctrl-1 = <&spi_0_sleep>;
+		pinctrl-2 = <&spi_0_active>;
+		pinctrl-3 = <&spi_0_mosi_ack &spi_0_miso_ack>;
+		pinctrl-4 = <&i2c_1_active>;
+
+		transports {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0 0xffffffff>;
+
+			/* Dummy Place Holder for SPI */
+			spi_0: spi@7575000 { };
+		};
+	};
+};
+
+&spi_0 {
+	compatible = "qcom,spi-qup-v2.2.1";
+	reg = <0x07575000 0x600>;
+	interrupts = <GIC_SPI 95 IRQ_TYPE_LEVEL_HIGH>;
+	clocks = <&gcc GCC_BLSP1_QUP1_SPI_APPS_CLK>,
+		 <&gcc GCC_BLSP1_AHB_CLK>;
+	clock-names = "core", "iface";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&blsp1_spi0_default>;
+	pinctrl-1 = <&blsp1_spi0_sleep>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "disabled";
+};
+
+&blsp1_spi0 {
+	status = "ok";
+
+	cs-gpios = <&msmgpio 2 0>;
+
+	/delete-property/ pinctrl-0;
+	/delete-property/ pinctrl-1;
+	/delete-property/ pinctrl-names;
+
+	muc_spi: muc_spi@0 {
+		compatible = "moto,muc_spi";
+		reg = <0>;
+		interrupt-parent = <&msmgpio>;
+		interrupts = <79 0>;
+		spi-max-frequency = <4800000>;
+
+		mmi,intf-id = /bits/ 8 <3>;
+	};
+};
