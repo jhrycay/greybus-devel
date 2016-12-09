@@ -55,7 +55,7 @@ static void gb_connection_put(struct gb_connection *connection)
 /*
  * Returns a reference-counted pointer to the connection if found.
  */
-static struct gb_connection *
+struct gb_connection *
 gb_connection_hd_find(struct gb_host_device *hd, u16 cport_id)
 {
 	struct gb_connection *connection;
@@ -73,6 +73,7 @@ found:
 
 	return connection;
 }
+EXPORT_SYMBOL_GPL(gb_connection_hd_find);
 
 /*
  * Callback from the host driver to let us know that data has been
