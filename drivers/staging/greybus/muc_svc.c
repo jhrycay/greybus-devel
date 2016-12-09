@@ -18,7 +18,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/wakelock.h>
 #include <linux/workqueue.h>
 
 #include "cust_kernel_ver.h"
@@ -61,7 +60,6 @@ struct muc_svc_data {
 
 	u8 mod_root_ver;
 	u8 def_root_ver;
-	struct wake_lock wlock;
 };
 struct muc_svc_data *svc_dd;
 
@@ -569,7 +567,7 @@ static int muc_svc_create_dl_dev_sysfs(struct mods_dl_device *mods_dev)
 		goto put_kobj;
 
 	/* Hold a timed wakelock for userspace to handle attach */
-	wake_lock_timeout(&svc_dd->wlock, msecs_to_jiffies(1000));
+	pm_wakeup_event(&svc_dd->pdev->dev, 1000);
 	kobject_uevent(&mods_dev->intf_kobj, KOBJ_ADD);
 
 	return 0;
@@ -586,7 +584,7 @@ static void muc_svc_destroy_dl_dev_sysfs(struct mods_dl_device *mods_dev)
 		return;
 
 	/* Hold a timed wakelock for userspace to handle detach */
-	wake_lock_timeout(&svc_dd->wlock, msecs_to_jiffies(1000));
+	pm_wakeup_event(&svc_dd->pdev->dev, 1000);
 	sysfs_remove_bin_file(&mods_dev->intf_kobj,
 				&mods_dev->manifest_attr);
 	kobject_put(&mods_dev->intf_kobj);
@@ -2881,13 +2879,19 @@ static int muc_svc_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&dd->operations);
 	INIT_LIST_HEAD(&dd->ext_intf);
 	INIT_LIST_HEAD(&dd->slave_drv);
-	wake_lock_init(&dd->wlock, WAKE_LOCK_SUSPEND, "muc_svc");
+
+	device_set_wakeup_capable(&pdev->dev, true);
+	ret = device_wakeup_enable(&pdev->dev);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to set device wakeup: %d\n", ret);
+		goto free_wdog_wq;
+	}
 
 	/* Create the core sysfs structure */
 	ret = muc_svc_base_sysfs_init(dd);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to create base sysfs\n");
-		goto free_wdog_wq;
+		goto disable_wake;
 	}
 
 	ret = muc_svc_install_ap_filters(svc_dd);
@@ -2914,9 +2918,10 @@ static int muc_svc_probe(struct platform_device *pdev)
 
 free_kset:
 	kset_unregister(dd->intf_kset);
+disable_wake:
+	device_wakeup_disable(&pdev->dev);
 free_wdog_wq:
 	destroy_workqueue(dd->wdog_wq);
-	wake_lock_destroy(&dd->wlock);
 free_wq:
 	destroy_workqueue(dd->wq);
 free_dl_dev:
@@ -2935,7 +2940,7 @@ static int muc_svc_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&dd->wdog_work);
 	destroy_workqueue(dd->wdog_wq);
 	destroy_workqueue(dd->wq);
-	wake_lock_destroy(&dd->wlock);
+	device_wakeup_disable(&pdev->dev);
 	mods_remove_dl_device(dd->dld);
 
 	return 0;
