@@ -216,4 +216,12 @@ config GREYBUS_USB
 	  will be called gb-usb.ko
 
 endif	# GREYBUS_BRIDGED_PHY
+
+config GREYBUS_MOTOMODS
+	tristate "Greybus Support for Motorola's MODs hardware"
+	depends on SPI && OF
+	---help---
+	  Select this option if you have a device that supports the Motorola
+	  MODs device connector.
+
 endif	# GREYBUS

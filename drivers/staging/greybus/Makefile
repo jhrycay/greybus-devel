@@ -89,6 +89,10 @@ obj-$(CONFIG_GREYBUS_SPI)		+= gb-spi.o gb-spilib.o
 obj-$(CONFIG_GREYBUS_UART)		+= gb-uart.o
 obj-$(CONFIG_GREYBUS_USB)		+= gb-usb.o
 
+# Motorola MODs
+gb-mods-y := mods_ap.o muc_core.o muc_gpio.o muc_spi.o mods_nw.o \
+		muc_svc.o mods_init.o crc.o
+obj-$(CONFIG_GREYBUS_MOTOMODS) += gb-mods.o
 
 # Greybus Platform driver
 gb-arche-y	:= arche-platform.o arche-apb-ctrl.o
