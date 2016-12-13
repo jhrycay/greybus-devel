@@ -2497,8 +2497,8 @@ struct mods_nw_msg_filter svc_ap_filters[] = {
 		.filter_handler = svc_filter_ap_disconnected,
 	},
 	{
-		.protocol_id = GREYBUS_PROTOCOL_FIRMWARE,
-		.type = GB_FIRMWARE_TYPE_READY_TO_BOOT,
+		.protocol_id = GREYBUS_PROTOCOL_BOOTROM,
+		.type = GB_BOOTROM_TYPE_READY_TO_BOOT,
 		.filter_handler = svc_filter_ready_to_boot,
 	},
 };
