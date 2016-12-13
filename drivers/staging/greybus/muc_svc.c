@@ -923,11 +923,84 @@ struct svc_gb_dme_entry {
 			u16 attr, u16 selector, u32 value);
 };
 
+static int
+svc_gb_dme_get_mfd_id(struct mods_dl_device *dld, u8 intf_id, u16 attr,
+		      u16 selector, u32 *value)
+{
+	struct mods_dl_device *mods_dev = mods_nw_get_dl_device(intf_id);
+
+	if (!mods_dev) {
+		dev_err(&svc_dd->pdev->dev,
+			"%s: No intf id: %d in registered devices\n",
+			__func__, intf_id);
+		return -ENODEV;
+	}
+
+	if (!mods_dev->hpw) {
+		dev_err(&svc_dd->pdev->dev,
+			"%s: Failed to find hotplug data for id: %d\n",
+			__func__, intf_id);
+		return -EBUSY;
+	}
+
+	*value = mods_dev->hpw->hotplug.data.unipro_mfg_id;
+
+	return 0;
+}
+
+static int
+svc_gb_dme_get_prod_id(struct mods_dl_device *dld, u8 intf_id, u16 attr,
+		       u16 selector, u32 *value)
+{
+	struct mods_dl_device *mods_dev = mods_nw_get_dl_device(intf_id);
+
+	if (!mods_dev) {
+		dev_err(&svc_dd->pdev->dev,
+			"%s: No intf id: %d in registered devices\n",
+			__func__, intf_id);
+		return -ENODEV;
+	}
+
+	if (!mods_dev->hpw) {
+		dev_err(&svc_dd->pdev->dev,
+			"%s: Failed to find hotplug data for id: %d\n",
+			__func__, intf_id);
+		return -EBUSY;
+	}
+
+	*value = mods_dev->hpw->hotplug.data.unipro_prod_id;
+
+	return 0;
+}
+
+/* TODO: expose these outside of interface.c? */
+/* DME Attributes we need to fake responses for */
+#define DME_SELECTOR_INDEX_NULL		0
+#define DME_T_TST_SRC_INCREMENT		0x4083
+#define DME_DDBL1_MANUFACTURERID	0x5003
+#define DME_DDBL1_PRODUCTID		0x5004
+#define DME_TOSHIBA_GMP_INIT_STATUS	0x6101
+
 static struct svc_gb_dme_entry dme_entries[] = {
 	{
-		.attr = DME_ATTR_T_TST_SRC_INCREMENT,
-		.selector = DME_ATTR_SELECTOR_INDEX,
+		.attr = DME_T_TST_SRC_INCREMENT,
+		.selector = DME_SELECTOR_INDEX_NULL,
 		.default_value = 0xB007ED,
+	},
+	{
+		.attr = DME_TOSHIBA_GMP_INIT_STATUS,
+		.selector = DME_SELECTOR_INDEX_NULL,
+		.default_value = 0xB007ED,
+	},
+	{
+		.attr = DME_DDBL1_MANUFACTURERID,
+		.selector = DME_SELECTOR_INDEX_NULL,
+		.dme_get = svc_gb_dme_get_mfd_id,
+	},
+	{
+		.attr = DME_DDBL1_PRODUCTID,
+		.selector = DME_SELECTOR_INDEX_NULL,
+		.dme_get = svc_gb_dme_get_prod_id,
 	},
 };
 
