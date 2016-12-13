@@ -28,6 +28,17 @@
 #include "muc_svc.h"
 #include "mods_nw.h"
 
+/* Highest control-protocol version supported */
+#define GB_CONTROL_VERSION_MAJOR        0
+#define GB_CONTROL_VERSION_MINOR        1
+
+#define GB_REQUEST_TYPE_PROTOCOL_VERSION 0x01
+
+struct gb_protocol_version_response {
+	__u8    major;
+	__u8    minor;
+} __packed;
+
 enum muc_svc_recover {
 	MUC_SVC_RECOVERY_FULL,
 	MUC_SVC_RECOVERY_OFF,
