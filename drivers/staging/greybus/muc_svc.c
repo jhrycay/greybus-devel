@@ -73,16 +73,24 @@ static DEFINE_SPINLOCK(svc_ops_lock);
 #define SVC_VENDOR_CTRL_CPORT(intfid) (SVC_VENDOR_CTRL_CPORT_BASE + intfid)
 #define SVC_VENDOR_CTRL_INTF(cport) (cport - SVC_VENDOR_CTRL_CPORT_BASE)
 
-struct muc_svc_hotplug_work {
+struct muc_svc_ids {
+	__le32  unipro_mfg_id;
+	__le32  unipro_prod_id;
+	__le32  ara_vend_id;
+	__le32  ara_prod_id;
+} __packed;
+
+struct muc_svc_insert_work {
 	struct work_struct work;
 	struct mods_dl_device *dld;
-	struct gb_svc_intf_hotplug_request hotplug;
+	struct muc_svc_ids ids;
+	struct gb_svc_module_inserted_request insert;
 };
 
 #define MUC_SVC_RESPONSE_TYPE 0
 
 #define SVC_MSG_DEFAULT_TIMEOUT 500
-#define SVC_AP_HOTPLUG_UNPLUG_TIMEOUT 5000
+#define SVC_AP_INSERT_REMOVE_TIMEOUT 5000
 #define SVC_CURRENT_LIMIT_TIMEOUT_MS 100
 
 #define kobj_to_device(k) \
@@ -202,11 +210,11 @@ static void send_event_to_userspace(const char *event,
 	add_uevent_var(env, event);
 	add_uevent_var(env, "RECOVERY_RETRIES=%d", count);
 	add_uevent_var(env, "INTERFACE_ID=%d", mods_dev->intf_id);
-	if (mods_dev->hpw) {
+	if (mods_dev->insw) {
 		add_uevent_var(env, "RECOVERY_VID=%d",
-			mods_dev->hpw->hotplug.data.ara_vend_id);
+			mods_dev->insw->ids.ara_vend_id);
 		add_uevent_var(env, "RECOVERY_PID=%d",
-			mods_dev->hpw->hotplug.data.ara_prod_id);
+			mods_dev->insw->ids.ara_prod_id);
 		add_uevent_var(env, "RECOVERY_UID=0x%016llX%016llX",
 			mods_dev->uid_high, mods_dev->uid_low);
 	}
@@ -301,38 +309,38 @@ static ssize_t serial_show(struct mods_dl_device *dev, char *buf)
 
 static ssize_t vid_show(struct mods_dl_device *dev, char *buf)
 {
-	if (!dev->hpw)
+	if (!dev->insw)
 		return -EINVAL;
 
 	return scnprintf(buf, PAGE_SIZE, "0x%04X",
-		dev->hpw->hotplug.data.ara_vend_id);
+		dev->insw->ids.ara_vend_id);
 }
 
 static ssize_t pid_show(struct mods_dl_device *dev, char *buf)
 {
-	if (!dev->hpw)
+	if (!dev->insw)
 		return -EINVAL;
 
 	return scnprintf(buf, PAGE_SIZE, "0x%04X",
-		dev->hpw->hotplug.data.ara_prod_id);
+		dev->insw->ids.ara_prod_id);
 }
 
 static ssize_t unipro_mid_show(struct mods_dl_device *dev, char *buf)
 {
-	if (!dev->hpw)
+	if (!dev->insw)
 		return -EINVAL;
 
 	return scnprintf(buf, PAGE_SIZE, "0x%04X",
-		dev->hpw->hotplug.data.unipro_mfg_id);
+		dev->insw->ids.unipro_mfg_id);
 }
 
 static ssize_t unipro_pid_show(struct mods_dl_device *dev, char *buf)
 {
-	if (!dev->hpw)
+	if (!dev->insw)
 		return -EINVAL;
 
 	return scnprintf(buf, PAGE_SIZE, "0x%04X",
-		dev->hpw->hotplug.data.unipro_prod_id);
+		dev->insw->ids.unipro_prod_id);
 }
 
 static ssize_t
@@ -349,11 +357,11 @@ hotplug_store(struct mods_dl_device *dev, const char *buf, size_t count)
 
 	switch (val) {
 	case 1:
-		/* Nothing to do, there is no hotplug, or we already sent */
-		if (!dev->hpw || dev->hotplug_sent)
+		/* Nothing to do, no module insert, or we already sent */
+		if (!dev->insw || dev->insert_sent)
 			return -EINVAL;
 
-		queue_work(svc_dd->wq, &dev->hpw->work);
+		queue_work(svc_dd->wq, &dev->insw->work);
 		break;
 	case 0:
 		dev_info(&svc_dd->pdev->dev,
@@ -936,14 +944,14 @@ svc_gb_dme_get_mfd_id(struct mods_dl_device *dld, u8 intf_id, u16 attr,
 		return -ENODEV;
 	}
 
-	if (!mods_dev->hpw) {
+	if (!mods_dev->insw) {
 		dev_err(&svc_dd->pdev->dev,
-			"%s: Failed to find hotplug data for id: %d\n",
+			"%s: Failed to find insert data for id: %d\n",
 			__func__, intf_id);
 		return -EBUSY;
 	}
 
-	*value = mods_dev->hpw->hotplug.data.unipro_mfg_id;
+	*value = mods_dev->insw->ids.unipro_mfg_id;
 
 	return 0;
 }
@@ -961,14 +969,14 @@ svc_gb_dme_get_prod_id(struct mods_dl_device *dld, u8 intf_id, u16 attr,
 		return -ENODEV;
 	}
 
-	if (!mods_dev->hpw) {
+	if (!mods_dev->insw) {
 		dev_err(&svc_dd->pdev->dev,
-			"%s: Failed to find hotplug data for id: %d\n",
+			"%s: Failed to find insert data for id: %d\n",
 			__func__, intf_id);
 		return -EBUSY;
 	}
 
-	*value = mods_dev->hpw->hotplug.data.unipro_prod_id;
+	*value = mods_dev->insw->ids.unipro_prod_id;
 
 	return 0;
 }
@@ -1618,9 +1626,8 @@ static void muc_svc_broadcast_slave_notification(struct mods_dl_device *master)
 }
 
 static int
-muc_svc_get_hotplug_data(struct mods_dl_device *dld,
-			struct gb_svc_intf_hotplug_request *hotplug,
-			struct mods_dl_device *mods_dev)
+muc_svc_get_id_data(struct mods_dl_device *dld, struct muc_svc_ids *svc_ids,
+		    struct mods_dl_device *mods_dev)
 {
 	struct mb_control_get_ids_response *ids;
 	struct muc_svc_data *dd = dld_get_dd(dld);
@@ -1644,10 +1651,10 @@ muc_svc_get_hotplug_data(struct mods_dl_device *dld,
 
 	memcpy(ids, msg->payload, min(msg->payload_size, sizeof(*ids)));
 
-	hotplug->data.unipro_mfg_id = le32_to_cpu(ids->unipro_mfg_id);
-	hotplug->data.unipro_prod_id = le32_to_cpu(ids->unipro_prod_id);
-	hotplug->data.ara_vend_id = le32_to_cpu(ids->ara_vend_id);
-	hotplug->data.ara_prod_id = le32_to_cpu(ids->ara_prod_id);
+	svc_ids->unipro_mfg_id = le32_to_cpu(ids->unipro_mfg_id);
+	svc_ids->unipro_prod_id = le32_to_cpu(ids->unipro_prod_id);
+	svc_ids->ara_vend_id = le32_to_cpu(ids->ara_vend_id);
+	svc_ids->ara_prod_id = le32_to_cpu(ids->ara_prod_id);
 
 	/* Save interface device specific data */
 	mods_dev->uid_low = le64_to_cpu(ids->uid_low);
@@ -1658,9 +1665,9 @@ muc_svc_get_hotplug_data(struct mods_dl_device *dld,
 	mods_dev->fw_version_str[FW_VER_STR_SZ - 1] = 0;
 
 	dev_info(&dd->pdev->dev, "[%d] UNIPRO_IDS: %x:%x ARA_IDS: %x:%x\n",
-		mods_dev->intf_id, hotplug->data.unipro_mfg_id,
-		hotplug->data.unipro_prod_id, hotplug->data.ara_vend_id,
-		hotplug->data.ara_prod_id);
+		mods_dev->intf_id, svc_ids->unipro_mfg_id,
+		svc_ids->unipro_prod_id, svc_ids->ara_vend_id,
+		svc_ids->ara_prod_id);
 	dev_info(&dd->pdev->dev, "[%d] MOD SERIAL: %016llX%016llX\n",
 		mods_dev->intf_id, mods_dev->uid_high, mods_dev->uid_low);
 	dev_info(&dd->pdev->dev, "[%d] MOD FW_VER: 0x%08X\n",
@@ -1803,28 +1810,28 @@ static void muc_svc_destroy_control_route(u8 intf_id, u16 src, u16 dest)
 
 static void muc_svc_attach_work(struct work_struct *work)
 {
-	struct muc_svc_hotplug_work *hpw;
+	struct muc_svc_insert_work *insw;
 	struct gb_message *msg;
 
-	hpw = container_of(work, struct muc_svc_hotplug_work, work);
+	insw = container_of(work, struct muc_svc_insert_work, work);
 
-	if (hpw->dld->hotplug_sent)
+	if (insw->dld->insert_sent)
 		return;
 
 	msg = svc_gb_msg_send_sync_timeout(svc_dd->dld,
-					(uint8_t *)&hpw->hotplug,
-					GB_SVC_TYPE_INTF_HOTPLUG,
-					sizeof(hpw->hotplug), GB_SVC_CPORT_ID,
-					SVC_AP_HOTPLUG_UNPLUG_TIMEOUT);
+					(uint8_t *)&insw->insert,
+					GB_SVC_TYPE_MODULE_INSERTED,
+					sizeof(insw->insert), GB_SVC_CPORT_ID,
+					SVC_AP_INSERT_REMOVE_TIMEOUT);
+
 	if (IS_ERR(msg)) {
-		dev_err(&svc_dd->pdev->dev, "[%d] Failed to send HOTPLUG\n",
-			hpw->hotplug.intf_id);
+		dev_err(&svc_dd->pdev->dev, "[%d] Failed to send INSERT\n",
+			insw->insert.primary_intf_id);
 		return;
 	}
-
-	hpw->dld->hotplug_sent = true;
-	dev_info(&svc_dd->pdev->dev, "[%d] Successfully sent HOTPLUG\n",
-			hpw->hotplug.intf_id);
+	insw->dld->insert_sent = true;
+	dev_info(&svc_dd->pdev->dev, "[%d] Successfully sent INSERT\n",
+		 insw->insert.primary_intf_id);
 
 	svc_gb_msg_free(msg);
 }
@@ -1981,18 +1988,18 @@ static int muc_svc_send_rtc_sync(struct mods_dl_device *mods_dev)
 	return ret;
 }
 
-static struct muc_svc_hotplug_work *
-muc_svc_create_hotplug_work(struct mods_dl_device *mods_dev)
+static struct muc_svc_insert_work *
+muc_svc_create_insert_work(struct mods_dl_device *mods_dev)
 {
-	struct muc_svc_hotplug_work *hpw;
+	struct muc_svc_insert_work *insw;
 	int ret;
 
-	hpw = kzalloc(sizeof(*hpw), GFP_KERNEL);
-	if (!hpw)
+	insw = kzalloc(sizeof(*insw), GFP_KERNEL);
+	if (!insw)
 		return ERR_PTR(-ENOMEM);
 
-	hpw->dld = mods_dev;
-	INIT_WORK(&hpw->work, muc_svc_attach_work);
+	insw->dld = mods_dev;
+	INIT_WORK(&insw->work, muc_svc_attach_work);
 
 	/* Create route SVC:INTFID<-->INTFID:0 to hook into the reserved
 	 * control protocol to obtain the manifest.
@@ -2003,7 +2010,7 @@ muc_svc_create_hotplug_work(struct mods_dl_device *mods_dev)
 		dev_err(&svc_dd->pdev->dev,
 			"[%d] Failed setup GB CONTROL route\n",
 			mods_dev->intf_id);
-		goto free_hpw;
+		goto free_insw;
 	}
 
 	/* Get/Negotiate MB Control Protocol Version */
@@ -2031,12 +2038,14 @@ muc_svc_create_hotplug_work(struct mods_dl_device *mods_dev)
 			goto free_route;
 	}
 
-	/* Get the hotplug IDs */
-	ret = muc_svc_get_hotplug_data(svc_dd->dld, &hpw->hotplug, mods_dev);
+	/* Get the module's IDs */
+	ret = muc_svc_get_id_data(svc_dd->dld, &insw->ids, mods_dev);
 	if (ret)
 		goto free_route;
 
-	hpw->hotplug.intf_id = mods_dev->intf_id;
+	insw->insert.primary_intf_id = mods_dev->intf_id;
+	insw->insert.intf_count = 1;
+	insw->insert.flags = 0;
 
 	/* Get the hardware's core version if protocol reported support */
 	if (MB_CONTROL_SUPPORTS(mods_dev, GET_ROOT_VER)) {
@@ -2055,58 +2064,58 @@ muc_svc_create_hotplug_work(struct mods_dl_device *mods_dev)
 	muc_svc_destroy_control_route(mods_dev->intf_id,
 				mods_dev->intf_id, GB_CONTROL_CPORT_ID);
 
-	return hpw;
+	return insw;
 
 free_route:
 	muc_svc_destroy_control_route(mods_dev->intf_id,
 				mods_dev->intf_id, GB_CONTROL_CPORT_ID);
-free_hpw:
-	kfree(hpw);
+free_insw:
+	kfree(insw);
 
 	return ERR_PTR(ret);
 }
 
-static int muc_svc_generate_hotplug(struct mods_dl_device *mods_dev)
+static int muc_svc_generate_insert(struct mods_dl_device *mods_dev)
 {
-	struct muc_svc_hotplug_work *hpw;
+	struct muc_svc_insert_work *insw;
 
-	hpw = muc_svc_create_hotplug_work(mods_dev);
-	if (IS_ERR(hpw))
-		return PTR_ERR(hpw);
+	insw = muc_svc_create_insert_work(mods_dev);
+	if (IS_ERR(insw))
+		return PTR_ERR(insw);
 
-	mods_dev->hpw = hpw;
+	mods_dev->insw = insw;
 
 	if (svc_dd->authenticate == false)
-		queue_work(svc_dd->wq, &hpw->work);
+		queue_work(svc_dd->wq, &insw->work);
 
 	return 0;
 }
 
-static int muc_svc_generate_unplug(struct mods_dl_device *mods_dev)
+static int muc_svc_generate_remove(struct mods_dl_device *mods_dev)
 {
 	struct gb_message *msg;
-	struct gb_svc_intf_hot_unplug_request unplug;
+	struct gb_svc_module_removed_request remove;
 
-	if (!mods_dev->hotplug_sent)
+	if (!mods_dev->insert_sent)
 		return 0;
 
-	mods_dev->hotplug_sent = 0;
-	unplug.intf_id = mods_dev->intf_id;
+	mods_dev->insert_sent = 0;
+	remove.primary_intf_id = mods_dev->intf_id;
 
-	msg = svc_gb_msg_send_sync_timeout(svc_dd->dld, (uint8_t *)&unplug,
-					GB_SVC_TYPE_INTF_HOT_UNPLUG,
-					sizeof(unplug), GB_SVC_CPORT_ID,
-					SVC_AP_HOTPLUG_UNPLUG_TIMEOUT);
+	msg = svc_gb_msg_send_sync_timeout(svc_dd->dld, (uint8_t *)&remove,
+					   GB_SVC_TYPE_MODULE_REMOVED,
+					   sizeof(remove), GB_SVC_CPORT_ID,
+					   SVC_AP_INSERT_REMOVE_TIMEOUT);
 	if (IS_ERR(msg)) {
-		dev_err(&svc_dd->pdev->dev, "[%d] Failed to send UNPLUG\n",
+		dev_err(&svc_dd->pdev->dev, "[%d] Failed to send REMOVE\n",
 			mods_dev->intf_id);
 		return PTR_ERR(msg);
 	}
 
 	svc_gb_msg_free(msg);
 
-	dev_info(&svc_dd->pdev->dev, "[%d] Successfully sent UNPLUG\n",
-			mods_dev->intf_id);
+	dev_info(&svc_dd->pdev->dev, "[%d] Successfully sent REMOVE\n",
+		 mods_dev->intf_id);
 
 	return 0;
 }
@@ -2127,7 +2136,7 @@ void mods_dl_dev_detached(struct mods_dl_device *mods_dev)
 	list_del(&mods_dev->list);
 	mutex_unlock(&svc_list_lock);
 
-	muc_svc_generate_unplug(mods_dev);
+	muc_svc_generate_remove(mods_dev);
 
 	/* Destroy custom vendor control route */
 	muc_svc_destroy_control_route(mods_dev->intf_id,
@@ -2135,8 +2144,8 @@ void mods_dl_dev_detached(struct mods_dl_device *mods_dev)
 			VENDOR_CTRL_DEST_CPORT);
 
 	kfree(mods_dev->manifest);
-	kfree(mods_dev->hpw);
-	mods_dev->hpw = NULL;
+	kfree(mods_dev->insw);
+	mods_dev->insw = NULL;
 	mods_dev->high_current_reserved = false;
 	mods_dev->fw_vendor_updates = false;
 
@@ -2148,7 +2157,7 @@ void mods_dl_dev_detached(struct mods_dl_device *mods_dev)
 EXPORT_SYMBOL_GPL(mods_dl_dev_detached);
 
 /* Notifies that the DL device is in attached state and the
- * hotplug event can be kicked off
+ * module insert event can be kicked off
  */
 int mods_dl_dev_attached(struct mods_dl_device *mods_dev)
 {
@@ -2198,7 +2207,7 @@ int mods_dl_dev_attached(struct mods_dl_device *mods_dev)
 		goto recovery;
 	}
 
-	err = muc_svc_generate_hotplug(mods_dev);
+	err = muc_svc_generate_insert(mods_dev);
 	if (err)
 		goto free_ext_ctrl;
 
@@ -2284,7 +2293,7 @@ static void mods_dl_device_free(struct kref *kref)
 	struct mods_dl_device *mods_dev;
 
 	mods_dev = container_of(kref, struct mods_dl_device, kref);
-	kfree(mods_dev->hpw);
+	kfree(mods_dev->insw);
 	kfree(mods_dev);
 }
 
@@ -2735,11 +2744,11 @@ static int muc_svc_enter_fw_flash(struct device *dev)
 	struct mods_dl_device *mods_dev;
 	uint8_t mode = MB_CONTROL_REBOOT_MODE_BOOTLOADER;
 
-	/* Need to generate a hot unplug for each interface and then
+	/* Need to generate a module remove for each interface and then
 	 * issue the reboot command */
 	mutex_lock(&svc_list_lock);
 	list_for_each_entry(mods_dev, &dd->ext_intf, list) {
-		muc_svc_generate_unplug(mods_dev);
+		muc_svc_generate_remove(mods_dev);
 
 		/* Only do software reboot for hardware that can't
 		 * support force flash via hardware.

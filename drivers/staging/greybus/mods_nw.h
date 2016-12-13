@@ -62,12 +62,12 @@ struct mods_dl_device {
 	struct mods_dl_driver	*drv;
 	u8			intf_id;
 	u8			device_id;
-	bool			hotplug_sent;
+	bool			insert_sent;
 	void			*dl_priv;
 	struct kobject		intf_kobj;
 	struct bin_attribute	manifest_attr;
 
-	struct muc_svc_hotplug_work *hpw;
+	struct muc_svc_insert_work *insw;
 	char *manifest;
 	__le16 manifest_size;
 	__u8 gb_ctrl_major;
