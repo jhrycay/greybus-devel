@@ -72,6 +72,8 @@ static int muc_probe(struct platform_device *pdev)
 
 	muc_misc_data = ps_muc;
 
+	muc_intr_setup(ps_muc, dev);
+
 	return 0;
 
 err_gpio_init:
