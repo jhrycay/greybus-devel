@@ -241,6 +241,9 @@ int muc_gpio_ack_cfg(bool en);
 
 static inline bool muc_gpio_ack_is_supported(void)
 {
+	if (!muc_misc_data)
+		return false;
+
 	return (muc_misc_data->pins_spi_ack != NULL);
 }
 
