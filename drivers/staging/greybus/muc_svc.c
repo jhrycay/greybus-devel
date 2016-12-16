@@ -1125,6 +1125,82 @@ send_response:
 }
 
 static int
+svc_gb_vsys_handler(struct mods_dl_device *dld, struct gb_message *req_msg,
+		    uint16_t cport)
+{
+	struct gb_svc_intf_vsys_response resp;
+	int ret;
+
+	resp.result_code = GB_SVC_INTF_VSYS_OK;
+	ret = svc_gb_send_response(dld, cport, req_msg, sizeof(resp),
+				   &resp, GB_OP_SUCCESS);
+	if (ret)
+		dev_err(&svc_dd->pdev->dev,
+			"Failed response to VSYS_ENABLE|DISABLEd\n");
+
+	return ret;
+}
+
+static int
+svc_gb_refclk_handler(struct mods_dl_device *dld, struct gb_message *req_msg,
+		      uint16_t cport)
+{
+	struct gb_svc_intf_refclk_response resp;
+	int ret;
+
+	resp.result_code = GB_SVC_INTF_REFCLK_OK;
+	ret = svc_gb_send_response(dld, cport, req_msg, sizeof(resp),
+				   &resp, GB_OP_SUCCESS);
+	if (ret)
+		dev_err(&svc_dd->pdev->dev,
+			"Failed response to REFCLK_ENABLE|DISABLEd\n");
+
+	return ret;
+}
+
+static int
+svc_gb_unipro_handler(struct mods_dl_device *dld, struct gb_message *req_msg,
+		      uint16_t cport)
+{
+	struct gb_svc_intf_unipro_response resp;
+	int ret;
+
+	resp.result_code = GB_SVC_INTF_UNIPRO_OK;
+	ret = svc_gb_send_response(dld, cport, req_msg, sizeof(resp),
+				   &resp, GB_OP_SUCCESS);
+	if (ret)
+		dev_err(&svc_dd->pdev->dev,
+			"Failed response to UNIPRO_ENABLE|DISABLEd\n");
+
+	return ret;
+}
+
+static int
+svc_gb_intf_activate(struct mods_dl_device *dld, struct gb_message *req_msg,
+		     uint16_t cport)
+{
+	struct gb_svc_intf_activate_request *req;
+	struct gb_svc_intf_activate_response resp;
+	int ret;
+
+	req = (struct gb_svc_intf_activate_request *)req_msg->payload;
+
+	dev_info(&svc_dd->pdev->dev,
+		 "INTF_ACTIVATE for interface: %d\n", req->intf_id);
+
+	resp.intf_type = GB_SVC_INTF_TYPE_GREYBUS;
+	resp.status = GB_SVC_OP_SUCCESS;
+
+	ret = svc_gb_send_response(dld, cport, req_msg, sizeof(resp),
+				   &resp, GB_OP_SUCCESS);
+	if (ret)
+		dev_err(&svc_dd->pdev->dev,
+			"Failed response to INTF_ACTIVATE\n");
+
+	return ret;
+}
+
+static int
 muc_svc_handle_ap_request(struct mods_dl_device *dld, uint8_t *data,
 			  size_t msg_size, uint16_t cport)
 {
@@ -1164,6 +1240,24 @@ muc_svc_handle_ap_request(struct mods_dl_device *dld, uint8_t *data,
 	case GB_SVC_TYPE_DME_PEER_SET:
 		ret = svc_gb_dme_set(dld, req, cport);
 		goto free_request;
+	case GB_SVC_TYPE_INTF_VSYS_ENABLE:
+	case GB_SVC_TYPE_INTF_VSYS_DISABLE:
+		ret = svc_gb_vsys_handler(dld, req, cport);
+		goto free_request;
+	case GB_SVC_TYPE_INTF_REFCLK_ENABLE:
+	case GB_SVC_TYPE_INTF_REFCLK_DISABLE:
+		ret = svc_gb_refclk_handler(dld, req, cport);
+		goto free_request;
+	case GB_SVC_TYPE_INTF_UNIPRO_ENABLE:
+	case GB_SVC_TYPE_INTF_UNIPRO_DISABLE:
+		ret = svc_gb_unipro_handler(dld, req, cport);
+		goto free_request;
+	case GB_SVC_TYPE_INTF_ACTIVATE:
+		ret = svc_gb_intf_activate(dld, req, cport);
+		goto free_request;
+	case GB_SVC_TYPE_INTF_RESUME:
+		ret = 0;
+		break;
 	default:
 		dev_err(&dd->pdev->dev, "Unsupported AP Request type: %d\n",
 					hdr.type);
