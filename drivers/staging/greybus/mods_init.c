@@ -20,8 +20,6 @@
 #include <linux/debugfs.h>
 #include <linux/module.h>
 
-#include "apba.h"
-#include "mods_uart.h"
 #include "muc.h"
 
 static struct dentry *mods_debug_root;
@@ -63,24 +61,8 @@ static int __init mods_init(void)
 		goto spi_fail;
 	}
 
-	err = apba_ctrl_init();
-	if (err) {
-		pr_err("apba_ctrl_init failed: %d\n", err);
-		goto apba_fail;
-	}
-
-	err = mods_uart_init();
-	if (err) {
-		pr_err("mods_uart_init failed: %d\n", err);
-		goto uart_fail;
-	}
-
 	return 0;
 
-uart_fail:
-	apba_ctrl_exit();
-apba_fail:
-	muc_spi_exit();
 spi_fail:
 	mods_ap_exit();
 ap_fail:
@@ -96,8 +78,6 @@ exit:
 
 static void __exit mods_exit(void)
 {
-	mods_uart_exit();
-	apba_ctrl_exit();
 	muc_spi_exit();
 	mods_ap_exit();
 	muc_svc_exit();
