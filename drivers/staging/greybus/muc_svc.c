@@ -2486,6 +2486,29 @@ svc_get_unsigned_manifest_size(struct mods_dl_device *mods_dev)
 }
 
 static int
+svc_filter_bundle_activate(struct mods_dl_device *orig_dev,
+			   u8 *payload, size_t size)
+{
+	struct muc_msg *mm = (struct muc_msg *)payload;
+	struct gb_message msg;
+	struct device *dev = &svc_dd->pdev->dev;
+	struct gb_control_bundle_pm_response resp;
+	int ret;
+
+	msg.header = (struct gb_operation_msg_hdr *)mm->gb_msg;
+
+	resp.status = GB_CONTROL_BUNDLE_PM_OK;
+
+	ret = svc_gb_send_response(orig_dev, le16_to_cpu(mm->hdr.cport), &msg,
+				   sizeof(resp), &resp, GB_OP_SUCCESS);
+	if (ret)
+		dev_err(dev, "[%d] Failed to route BUNDLE_{DE}ACTIVATE\n",
+			orig_dev->intf_id);
+
+	return ret;
+}
+
+static int
 svc_filter_ap_control_ver(struct mods_dl_device *orig_dev,
 			uint8_t *payload, size_t size)
 {
@@ -2682,6 +2705,16 @@ struct mods_nw_msg_filter svc_ap_filters[] = {
 		.protocol_id = GREYBUS_PROTOCOL_CONTROL,
 		.type = GB_CONTROL_TYPE_DISCONNECTED,
 		.filter_handler = svc_filter_ap_disconnected,
+	},
+	{
+		.protocol_id = GREYBUS_PROTOCOL_CONTROL,
+		.type = GB_CONTROL_TYPE_BUNDLE_ACTIVATE,
+		.filter_handler = svc_filter_bundle_activate,
+	},
+	{
+		.protocol_id = GREYBUS_PROTOCOL_CONTROL,
+		.type = GB_CONTROL_TYPE_BUNDLE_DEACTIVATE,
+		.filter_handler = svc_filter_bundle_activate,
 	},
 	{
 		.protocol_id = GREYBUS_PROTOCOL_BOOTROM,
