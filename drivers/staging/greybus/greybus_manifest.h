@@ -19,6 +19,7 @@ enum greybus_descriptor_type {
 	GREYBUS_TYPE_STRING		= 0x02,
 	GREYBUS_TYPE_BUNDLE		= 0x03,
 	GREYBUS_TYPE_CPORT		= 0x04,
+	GREYBUS_TYPE_IDS		= 0x05,
 };
 
 enum greybus_protocol {
@@ -153,6 +154,14 @@ struct greybus_descriptor_header {
 	__u8	pad;
 } __packed;
 
+/*
+ * Descriptor containing the vendor ID and product ID
+ */
+struct greybus_descriptor_ids {
+	__u32   vid;
+	__u32   pid;
+} __packed;
+
 struct greybus_descriptor {
 	struct greybus_descriptor_header		header;
 	union {
@@ -160,6 +169,7 @@ struct greybus_descriptor {
 		struct greybus_descriptor_interface	interface;
 		struct greybus_descriptor_bundle	bundle;
 		struct greybus_descriptor_cport		cport;
+		struct greybus_descriptor_ids		ids;
 	};
 } __packed;
 
