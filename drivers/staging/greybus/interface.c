@@ -65,7 +65,7 @@ static int gb_interface_read_ara_dme(struct gb_interface *intf)
 	if (intf->ddbl1_manufacturer_id != TOSHIBA_DMID) {
 		dev_err(&intf->dev, "unknown manufacturer %08x\n",
 				intf->ddbl1_manufacturer_id);
-		return -ENODEV;
+		return 0;
 	}
 
 	ret = gb_interface_dme_attr_get(intf, DME_TOSHIBA_GMP_VID,
