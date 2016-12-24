@@ -1201,6 +1201,24 @@ svc_gb_intf_activate(struct mods_dl_device *dld, struct gb_message *req_msg,
 }
 
 static int
+svc_gb_intf_set_pwrm(struct mods_dl_device *dld, struct gb_message *req_msg,
+		     uint16_t cport)
+{
+	struct gb_svc_intf_set_pwrm_response resp;
+	int ret;
+
+	resp.result_code = GB_SVC_SETPWRM_PWR_OK;
+
+	ret = svc_gb_send_response(dld, cport, req_msg, sizeof(resp),
+				   &resp, GB_OP_SUCCESS);
+	if (ret)
+		dev_err(&svc_dd->pdev->dev,
+			"Failed response to SET_PWRM\n");
+
+	return ret;
+}
+
+static int
 muc_svc_handle_ap_request(struct mods_dl_device *dld, uint8_t *data,
 			  size_t msg_size, uint16_t cport)
 {
@@ -1254,6 +1272,9 @@ muc_svc_handle_ap_request(struct mods_dl_device *dld, uint8_t *data,
 		goto free_request;
 	case GB_SVC_TYPE_INTF_ACTIVATE:
 		ret = svc_gb_intf_activate(dld, req, cport);
+		goto free_request;
+	case GB_SVC_TYPE_INTF_SET_PWRM:
+		ret = svc_gb_intf_set_pwrm(dld, req, cport);
 		goto free_request;
 	case GB_SVC_TYPE_INTF_RESUME:
 		ret = 0;
