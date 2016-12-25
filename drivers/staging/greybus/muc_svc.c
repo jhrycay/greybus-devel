@@ -1279,6 +1279,8 @@ muc_svc_handle_ap_request(struct mods_dl_device *dld, uint8_t *data,
 	case GB_SVC_TYPE_INTF_RESUME:
 		ret = 0;
 		break;
+	case GB_SVC_TYPE_PING:
+		break;
 	default:
 		dev_err(&dd->pdev->dev, "Unsupported AP Request type: %d\n",
 					hdr.type);
