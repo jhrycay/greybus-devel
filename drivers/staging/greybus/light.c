@@ -1115,6 +1115,10 @@ static void gb_lights_light_release(struct gb_light *light)
 	}
 	kfree(light->channels);
 	kfree(light->name);
+
+	light->name = NULL;
+	light->channels = NULL;
+	light->has_flash = false;
 }
 
 static void gb_lights_release(struct gb_lights *glights)
